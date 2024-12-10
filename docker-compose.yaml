@@ -1,17 +1,52 @@
-version: "3.8"
+version: '3'
 
 services:
   jenkins:
     image: jenkins/jenkins:lts
     container_name: jenkins
-    restart: always
+    environment:
+      - JENKINS_ADMIN_ID=admin
+      - JENKINS_ADMIN_PASSWORD=admin
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`example.com`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+      - "traefik.http.routers.jenkins.tls=true"
+      - "traefik.http.routers.jenkins.tls.certresolver=myresolver"
     volumes:
-      - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
+      - jenkins_home:/var/jenkins_home  # Сохраняет все данные Jenkins
+    networks:
+      - traefik
+    expose:
+      - 8080
     ports:
+      - "8080"
+  
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=your-email@example.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/acme.json"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./acme.json:/acme.json"
+    networks:
+      - traefik
+    ports:
+      - "80:80"
+      - "443:443"
       - "8080:8080"
-      - "50000:50000"
+
+networks:
+  traefik:
+    driver: bridge
 
 volumes:
-  jenkins_home:
-    driver: local
+  jenkins_home:  # Здесь сохраняются данные Jenkins
